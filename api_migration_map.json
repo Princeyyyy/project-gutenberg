@@ -1,0 +1,342 @@
+{
+  "api_identity": {
+    "name": "Project Gutenberg Bookmarked",
+    "version": "1.0.0",
+    "production_host": "https://gutenberg-bookmarked-737fe6b6f1ee.herokuapp.com"
+  },
+  "global_security": {
+    "protocol": "HTTPS (SSL Required)",
+    "auth_method": "Header-based API Key Verification",
+    "header_key": "X-Api-Key",
+    "header_value": "xSGCpn-wbPBOnMGEooG9x6xnEC5Vtsj_JIys1m7fMRk",
+    "alternative_auth": "Authorization: Bearer xSGCpn-wbPBOnMGEooG9x6xnEC5Vtsj_JIys1m7fMRk",
+    "error_handling": {
+      "unauthorized_http_status": 401,
+      "unauthorized_json_response": {
+        "error": "Unauthorized",
+        "message": "Missing or invalid API key. Set X-Api-Key in request headers."
+      }
+    },
+    "throttling": {
+      "anonymous_rate_limit": "120 requests/minute",
+      "throttle_classes": ["rest_framework.throttling.AnonRateThrottle"],
+      "unthrottled_endpoints": ["/", "/health/", "/static/*"]
+    }
+  },
+  "endpoints": [
+    {
+      "name": "API Documentation Portal",
+      "description": "Developer landing page, interactive dashboard, and live API request playground.",
+      "http_method": "GET",
+      "path": "/",
+      "requires_auth": false,
+      "query_parameters": {},
+      "response_content_type": "text/html; charset=utf-8",
+      "notes": "Public-facing single page application."
+    },
+    {
+      "name": "System Diagnostics Health Check",
+      "description": "Performs diagnostics verifying live PostgreSQL database and S3 Bucketeer storage connectivity.",
+      "http_method": "GET",
+      "path": "/health/",
+      "requires_auth": false,
+      "query_parameters": {},
+      "response_content_type": "application/json",
+      "success_response_sample": {
+        "status": "healthy",
+        "checks": {
+          "database": "healthy",
+          "storage": "healthy"
+        }
+      },
+      "failure_response_sample": {
+        "status": "unhealthy",
+        "checks": {
+          "database": "failed",
+          "storage": "healthy"
+        }
+      },
+      "notes": "Uptime monitors should query this endpoint (exempted from API Key validation)."
+    },
+    {
+      "name": "Search Autocomplete Suggestions",
+      "description": "Exposes lightweight search recommendations suitable for instant search-as-you-type inputs in the app.",
+      "http_method": "GET",
+      "path": "/api/v1/search/suggest/",
+      "legacy_paths": ["/search/suggest/"],
+      "requires_auth": true,
+      "query_parameters": {
+        "q": {
+          "type": "string",
+          "required": true,
+          "description": "Min 2 characters search term to match against book titles."
+        }
+      },
+      "response_content_type": "application/json",
+      "success_response_sample": [
+        {
+          "gutenberg_id": 1513,
+          "title": "Romeo and Juliet"
+        },
+        {
+          "gutenberg_id": 847,
+          "title": "Lays of Ancient Rome"
+        }
+      ],
+      "notes": "Highly optimized query fetching only values of gutenberg_id and title directly from index scans. Response latency < 15ms."
+    },
+    {
+      "name": "Books Metadata Catalog List",
+      "description": "Retrieve catalog book details. Supports pagination, sorting, search, and criteria filtering.",
+      "http_method": "GET",
+      "path": "/api/v1/books/",
+      "legacy_paths": ["/books/"],
+      "requires_auth": true,
+      "query_parameters": {
+        "page": {
+          "type": "integer",
+          "required": false,
+          "description": "Page number to view (defaults to page 1)."
+        },
+        "search": {
+          "type": "string",
+          "required": false,
+          "description": "Case-insensitive terms matching author names and book titles."
+        },
+        "languages": {
+          "type": "string",
+          "required": false,
+          "description": "Comma-separated two-character language codes (e.g. 'en,fr')."
+        },
+        "copyright": {
+          "type": "string",
+          "required": false,
+          "description": "Filter by copyright status: 'true' (copyrighted), 'false' (public domain), or 'null'."
+        },
+        "author_year_start": {
+          "type": "integer",
+          "required": false,
+          "description": "Filters books with authors alive after this year."
+        },
+        "author_year_end": {
+          "type": "integer",
+          "required": false,
+          "description": "Filters books with authors alive before this year."
+        },
+        "ids": {
+          "type": "string",
+          "required": false,
+          "description": "Comma-separated list of positive Gutenberg IDs (e.g. '11,12,13')."
+        },
+        "mime_type": {
+          "type": "string",
+          "required": false,
+          "description": "Filters by format MIME types starting with value (e.g. 'text/html')."
+        },
+        "topic": {
+          "type": "string",
+          "required": false,
+          "description": "Matches keyword inside bookshelves or subjects."
+        },
+        "sort": {
+          "type": "string",
+          "required": false,
+          "description": "Ordering types: 'popular' (default, download count), 'ascending' (ID order), 'descending'."
+        }
+      },
+      "response_content_type": "application/json",
+      "success_response_sample": {
+        "count": 72480,
+        "next": "https://gutenberg-bookmarked-737fe6b6f1ee.herokuapp.com/api/v1/books/?page=2",
+        "previous": null,
+        "results": [
+          {
+            "id": 84,
+            "title": "Frankenstein; or, the modern prometheus",
+            "authors": [
+              {
+                "name": "Shelley, Mary Wollstonecraft",
+                "birth_year": 1797,
+                "death_year": 1851
+              }
+            ],
+            "translators": [],
+            "editors": [],
+            "subjects": [
+              "Frankenstein's monster (Fictitious character) -- Fiction",
+              "Horror tales",
+              "Monster fiction",
+              "Science fiction",
+              "Scientists -- Fiction"
+            ],
+            "bookshelves": [
+              "Precursors of Science Fiction",
+              "Science Fiction by Women"
+            ],
+            "languages": ["en"],
+            "copyright": false,
+            "media_type": "Text",
+            "formats": {
+              "application/epub+zip": "https://www.gutenberg.org/ebooks/84.epub3.images",
+              "text/html": "https://www.gutenberg.org/ebooks/84.html.images"
+            },
+            "download_count": 92345
+          }
+        ]
+      },
+      "notes": "Optimized using prefetch_related for relationship joins, dropping server response times to ~90ms."
+    },
+    {
+      "name": "Individual Book Details",
+      "description": "Fetch catalog metadata for a single specific book.",
+      "http_method": "GET",
+      "path": "/api/v1/books/{gutenberg_id}/",
+      "legacy_paths": ["/books/{gutenberg_id}/"],
+      "requires_auth": true,
+      "query_parameters": {},
+      "response_content_type": "application/json",
+      "success_response_sample": {
+        "id": 84,
+        "title": "Frankenstein; or, the modern prometheus",
+        "authors": [{"name": "Shelley, Mary Wollstonecraft", "birth_year": 1797, "death_year": 1851}],
+        "translators": [],
+        "editors": [],
+        "subjects": ["Horror tales", "Science fiction"],
+        "bookshelves": ["Science Fiction by Women"],
+        "languages": ["en"],
+        "copyright": false,
+        "media_type": "Text",
+        "formats": {
+          "application/epub+zip": "https://www.gutenberg.org/ebooks/84.epub3.images"
+        },
+        "download_count": 92345
+      },
+      "notes": "gutenberg_id maps to Project Gutenberg catalog book ID."
+    },
+    {
+      "name": "Languages Lookups List",
+      "description": "List all language codes present in the database to populate search filters dynamically in the mobile app.",
+      "http_method": "GET",
+      "path": "/api/v1/languages/",
+      "legacy_paths": ["/languages/"],
+      "requires_auth": true,
+      "query_parameters": {},
+      "response_content_type": "application/json",
+      "success_response_sample": [
+        {"code": "en"},
+        {"code": "es"},
+        {"code": "fr"}
+      ],
+      "notes": "Returned without pagination limits for simpler dropdown select mappings."
+    },
+    {
+      "name": "Bookshelves Lookups List",
+      "description": "List all bookshelf names to populate category tags or list navigation filters dynamically.",
+      "http_method": "GET",
+      "path": "/api/v1/bookshelves/",
+      "legacy_paths": ["/bookshelves/"],
+      "requires_auth": true,
+      "query_parameters": {},
+      "response_content_type": "application/json",
+      "success_response_sample": [
+        {"name": "Adventure"},
+        {"name": "Arthurian Legends"},
+        {"name": "Science Fiction"}
+      ],
+      "notes": "Returned without pagination limits."
+    },
+    {
+      "name": "Subjects Lookups List",
+      "description": "List all book subject descriptions for tag browsing.",
+      "http_method": "GET",
+      "path": "/api/v1/subjects/",
+      "legacy_paths": ["/subjects/"],
+      "requires_auth": true,
+      "query_parameters": {},
+      "response_content_type": "application/json",
+      "success_response_sample": {
+        "count": 1824,
+        "next": "https://gutenberg-bookmarked-737fe6b6f1ee.herokuapp.com/api/v1/subjects/?page=2",
+        "previous": null,
+        "results": [
+          {"name": "Arthurian romances"},
+          {"name": "Horror tales"}
+        ]
+      }
+    },
+    {
+      "name": "Request Ebook Cache Job",
+      "description": "Trigger dynamic S3 caching check and Gutenberg mirror fetch. Used to download books without triggering 30s router timeouts.",
+      "http_method": "GET",
+      "path": "/api/v1/content/{gutenberg_id}/",
+      "legacy_paths": ["/content/{gutenberg_id}/"],
+      "requires_auth": true,
+      "query_parameters": {
+        "format": {
+          "type": "string",
+          "required": false,
+          "description": "Target format (defaults to 'epub'). Supported: 'epub', 'txt', 'plain', 'html', 'kindle'."
+        }
+      },
+      "response_content_type": "application/json",
+      "response_codes": {
+        "302": {
+          "description": "Cache Hit. Automatically redirects to the secure S3 Presigned download URL."
+        },
+        "202": {
+          "description": "Cache Miss. Job enqueued for background worker.",
+          "sample_payload": {
+            "status": "pending",
+            "gutenberg_id": "84",
+            "format": "application/epub+zip",
+            "message": "Content is being prepared. Poll /status/ for updates.",
+            "status_url": "/content/84/status/?format=epub"
+          }
+        }
+      }
+    },
+    {
+      "name": "Ebook Cache Job Status / Download Url",
+      "description": "Poll the caching status. Returns status checks and the final S3 download URL.",
+      "http_method": "GET",
+      "path": "/api/v1/content/{gutenberg_id}/status/",
+      "legacy_paths": ["/content/{gutenberg_id}/status/"],
+      "requires_auth": true,
+      "query_parameters": {
+        "format": {
+          "type": "string",
+          "required": false,
+          "description": "Target format (defaults to 'epub')."
+        }
+      },
+      "response_content_type": "application/json",
+      "states": {
+        "pending": {
+          "status": "pending",
+          "gutenberg_id": "84",
+          "format": "application/epub+zip"
+        },
+        "fetching": {
+          "status": "fetching",
+          "gutenberg_id": "84",
+          "format": "application/epub+zip"
+        },
+        "failed": {
+          "status": "failed",
+          "gutenberg_id": "84",
+          "format": "application/epub+zip",
+          "error": "Error details, retry enqueued automatically."
+        },
+        "ready": {
+          "status": "ready",
+          "gutenberg_id": "84",
+          "format": "application/epub+zip",
+          "url": "https://bucketeer-a40dd3d4-d3bf-41be-bf7d-fa03be6746d7.s3.amazonaws.com/books/84/pg84.epub?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=...",
+          "file_size_bytes": 356363,
+          "completed_at": "2026-07-13T15:49:51.591845"
+        }
+      },
+      "notes": "When state is 'ready', the 'url' field contains a secure temporary S3 Presigned URL (valid for 1 hour). Use 'file_size_bytes' to drive the mobile app's download progress percentage tracker."
+    }
+  ]
+}
