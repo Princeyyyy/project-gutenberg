@@ -53,9 +53,6 @@ def upload_file_to_s3(file_bytes, key, content_type='application/octet-stream'):
         Key=key,
         Body=file_bytes,
         ContentType=content_type,
-        # Make the object publicly readable so the Flutter app can download
-        # directly from S3 without going through our web dyno
-        ACL='public-read',
     )
 
     # Build the public URL
