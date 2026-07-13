@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/1.10/ref/settings/
 """
 
+import dj_database_url
 import environ
 import os
 
@@ -23,7 +24,9 @@ env = environ.Env(
     MANAGER_EMAILS=(list, []),
     MANAGER_NAMES=(list, []),
 )
-environ.Env.read_env()
+env_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env')
+if os.path.isfile(env_file):
+    environ.Env.read_env(env_file)
 
 
 # Build paths inside the project like this: os.path.join(BASE_DIR, ...)
@@ -62,7 +65,9 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    'gutendex.middleware.JsonExceptionMiddleware',
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -99,13 +104,20 @@ WSGI_APPLICATION = 'gutendex.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': env('DATABASE_NAME'),
-        'USER': env('DATABASE_USER'),
-        'PASSWORD': env('DATABASE_PASSWORD'),
-        'HOST': env('DATABASE_HOST'),
-        'PORT': env('DATABASE_PORT'),
+        'NAME': env('DATABASE_NAME', default='gutendex'),
+        'USER': env('DATABASE_USER', default=''),
+        'PASSWORD': env('DATABASE_PASSWORD', default=''),
+        'HOST': env('DATABASE_HOST', default='127.0.0.1'),
+        'PORT': env('DATABASE_PORT', default='5432'),
     }
 }
+
+# Heroku injects DATABASE_URL — override the above when present
+if 'DATABASE_URL' in os.environ:
+    DATABASES['default'] = dj_database_url.config(
+        conn_max_age=600,
+        ssl_require=True
+    )
 
 DEFAULT_AUTO_FIELD = 'django.db.models.AutoField'
 
@@ -146,13 +158,14 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/1.10/howto/static-files/
 
-STATIC_ROOT = env('STATIC_ROOT')
+STATIC_ROOT = env('STATIC_ROOT', default=os.path.join(BASE_DIR, 'staticfiles'))
 STATIC_URL = '/static/'
 STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static')]
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 
 # User-uploaded files
-MEDIA_ROOT = env('MEDIA_ROOT')
+MEDIA_ROOT = env('MEDIA_ROOT', default=os.path.join(BASE_DIR, 'media'))
 MEDIA_URL = '/media/'
 
 
@@ -172,10 +185,10 @@ MANAGERS = [
 
 
 # Email
-EMAIL_HOST = env('EMAIL_HOST')
-EMAIL_HOST_ADDRESS = env('EMAIL_HOST_ADDRESS')
-EMAIL_HOST_PASSWORD = env('EMAIL_HOST_PASSWORD')
-EMAIL_HOST_USER = env('EMAIL_HOST_USER')
+EMAIL_HOST = env('EMAIL_HOST', default='')
+EMAIL_HOST_ADDRESS = env('EMAIL_HOST_ADDRESS', default='')
+EMAIL_HOST_PASSWORD = env('EMAIL_HOST_PASSWORD', default='')
+EMAIL_HOST_USER = env('EMAIL_HOST_USER', default='')
 
 
 # Directory paths for catalog files and updater
@@ -195,9 +208,92 @@ REST_FRAMEWORK = {
     'DEFAULT_RENDERER_CLASSES': (
         'rest_framework.renderers.JSONRenderer',
     ),
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.AnonRateThrottle',
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': env('THROTTLE_RATE_ANON', default='120/minute'),
+    },
     'PAGE_SIZE': 32
 }
 
 
 # Cross-origin resource sharing with `corsheaders` middleware
 CORS_ALLOW_ALL_ORIGINS = True
+
+
+# S3-compatible object storage for cached book content
+# Works with AWS S3, Heroku Bucketeer, DigitalOcean Spaces
+S3_BUCKET_NAME = env('S3_BUCKET_NAME', default=env('BUCKETEER_BUCKET_NAME', default=''))
+S3_ACCESS_KEY_ID = env('S3_ACCESS_KEY_ID', default=env('BUCKETEER_AWS_ACCESS_KEY_ID', default=''))
+S3_SECRET_ACCESS_KEY = env('S3_SECRET_ACCESS_KEY', default=env('BUCKETEER_AWS_SECRET_ACCESS_KEY', default=''))
+S3_ENDPOINT_URL = env('S3_ENDPOINT_URL', default='')  # e.g. https://s3.amazonaws.com
+S3_REGION = env('S3_REGION', default=env('BUCKETEER_AWS_REGION', default='us-east-1'))
+S3_CUSTOM_DOMAIN = env('S3_CUSTOM_DOMAIN', default='')  # CDN/public URL prefix if different from endpoint
+
+
+# Project Gutenberg mirrors — NEVER fetch from www.gutenberg.org directly
+# Override via config var as comma-separated list
+_raw_mirrors = env(
+    'GUTENBERG_MIRRORS',
+    default='https://www.gutenberg.org/cache/epub,https://gutenberg.pglaf.org/cache/epub'
+)
+GUTENBERG_MIRRORS = [m.strip() for m in _raw_mirrors.split(',') if m.strip()]
+
+
+# Worker settings
+CONTENT_WORKER_POLL_INTERVAL = int(env('CONTENT_WORKER_POLL_INTERVAL', default='5'))  # seconds
+CONTENT_FETCH_TIMEOUT = int(env('CONTENT_FETCH_TIMEOUT', default='120'))  # seconds per mirror attempt
+
+
+# Production Security Controls (Active when running in non-debug mode)
+if not DEBUG:
+    # Tell Django that we are behind Heroku's SSL reverse proxy
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    SECURE_SSL_REDIRECT = True
+    
+    # Secure Session and CSRF cookies
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    
+    # HTTP Strict Transport Security (HSTS) headers (1 year duration)
+    SECURE_HSTS_SECONDS = 31536000
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+
+
+# Logging configuration (required for proper monitoring via heroku logs)
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '[%(asctime)s] %(levelname)s [%(name)s:%(lineno)s] %(message)s',
+            'datefmt': '%d/%b/%Y %H:%M:%S'
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose',
+        },
+    },
+    'root': {
+        'handlers': ['console'],
+        'level': 'INFO',
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['console'],
+            'level': env('DJANGO_LOG_LEVEL', default='INFO'),
+            'propagate': False,
+        },
+        'books': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+    },
+}
+
+

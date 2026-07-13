@@ -1,182 +1,120 @@
-Gutendex
-========
+# Project Gutenberg Bookmarked
 
-Gutendex is a simple, self-hosted [web API](https://en.wikipedia.org/wiki/Web_API) for serving book
-catalog information from [Project Gutenberg](https://www.gutenberg.org/wiki/Main_Page), an online
-library of free ebooks.
+Project Gutenberg Bookmarked is a high-performance, self-hosted web API for serving ebook catalog metadata and cached content files (EPUB, text, etc.) from [Project Gutenberg](https://www.gutenberg.org). It includes a resilient Gutenberg mirror integration, an asynchronous S3 caching layer to bypass router timeouts, and a sleek developer playground.
 
-Try it at [`gutendex.com`](http://gutendex.com).
-
-
-Why?
-----
-
-Project Gutenberg can be a useful source of literature, but its large size makes it difficult to
-access and analyse it on a large scale. Thus, an API of its catalog information is useful for
-automating these tasks.
-
-
-How does it work?
------------------
-
-Gutendex uses [Django](https://www.djangoproject.com) to download catalog data and serve it in a
-simple [JSON](http://json.org) [REST](https://en.wikipedia.org/wiki/Representational_state_transfer)
-API.
-
-Project Gutenberg has no such public API of its own, but it publishes nightly archives of
-complicated XML files. Gutendex downloads these files, stores their data in a database, and
-publishes the data in a simpler format.
-
-
-Installation
-------------
-
-See the [installation guide](https://github.com/garethbjohnson/gutendex/wiki/Installation-Guide).
-
-
-API
 ---
 
-When your server is up and running, you should see a home page that says "Gutendex" at the root URL
-(e.g. `http://localhost:8000` by default when using `manage.py` to serve on your local machine).
+## Local Setup & Quickstart
 
-You should run your own server, but you can test queries at [`gutendex.com`](http://gutendex.com).
+Follow these steps to run the application locally on your machine.
 
+### 1. Prerequisites
+Ensure you have **Python 3.11+** and **PostgreSQL** running locally.
 
-### Lists of Books
-
-Lists of book information in the database are queried using the API at `/books` (e.g.
-[`gutendex.com/books`](http://gutendex.com/books)). Book data will be returned in the JSON format
-
-```
-{
-  "count": <number>,
-  "next": <string or null>,
-  "previous": <string or null>,
-  "results": <array of Books>
-}
+### 2. Activate Virtual Environment & Install Dependencies
+```bash
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
 ```
 
-where `results` is an array of 0-32 book objects, `next` and `previous` are URLs to the next and
-previous pages of results, and `count` in the total number of books for the query on all pages
-combined.
-
-By default, books are ordered by popularity, determined by their numbers of downloads from Project
-Gutenberg.
-
-Parameters can also be added to book-list queries in a typical URL format. For example, to get the
-first page of written by authors alive after 1899 and published in English or French, you can go to
-[`/books?author_year_start=1900&languages=en,fr`](http://gutendex.com/books?author_year_start=1900&languages=en,fr)
-
-You can find available query parameters below.
-
-#### `author_year_start` and `author_year_end`
-Use these to find books with at least one author alive in a given range of years. They must have
-positive or negative integer values. For example,
-[`/books?author_year_end=-499`](http://gutendex.com/books?author_year_end=-499) gives books with
-authors alive before 500 BCE, and
-[`/books?author_year_start=1800&author_year_end=1899`](http://gutendex.com/books?author_year_start=1800&author_year_end=1899)
-gives books with authors alive in the 19th Century.
-
-#### `copyright`
-Use this to find books with a certain copyright status: `true` for books with existing copyrights,
-`false` for books in the [public domain](https://en.wikipedia.org/wiki/Public_domain) in the USA, or
-`null` for books with no available copyright information. These can be combined with commas. For
-example, [`/books?copyright=true,false`](http://gutendex.com/books?copyright=true,false) gives books
-with available copyright information.
-
-#### `ids`
-Use this to list books with Project Gutenberg ID numbers in a given list of numbers. They must be
-comma-separated positive integers. For example,
-[`/books?ids=11,12,13`](http://gutendex.com/books?ids=11,12,13) gives books with ID numbers 11, 12,
-and 13.
-
-#### `languages`
-Use this to find books in any of a list of languages. They must be comma-separated, two-character
-language codes. For example, [`/books?languages=en`](http://gutendex.com/books?languages=en) gives
-books in English, and [`/books?languages=fr,fi`](http://gutendex.com/books?languages=fr,fi) gives
-books in either French or Finnish or both.
-
-#### `mime_type`
-Use this to find books with a given [MIME type](https://en.wikipedia.org/wiki/Media_type). Gutendex
-gives every book with a MIME type *starting with* the value. For example,
-[`/books?mime_type=text%2F`](http://gutendex.com/books?mime_type=text%2F) gives books with types
-`text/html`, `text/plain; charset=us-ascii`, etc.; and
-[`/books?mime_type=text%2Fhtml`](http://gutendex.com/books?mime_type=text%2Fhtml) gives books with
-types `text/html`, `text/html; charset=utf-8`, etc.
-
-#### `search`
-Use this to search author names and book titles with given words. They must be separated by a space
-(i.e. `%20` in URL-encoded format) and are case-insensitive. For example,
-[`/books?search=dickens%20great`](http://gutendex.com/books?search=dickens%20great) includes *Great
-Expectations* by Charles Dickens.
-
-#### `sort`
-Use this to sort books: `ascending` for Project Gutenberg ID numbers from lowest to highest,
-`descending` for IDs highest to lowest, or `popular` (the default) for most popular to least
-popular by number of downloads.
-
-#### `topic`
-Use this to search for a case-insensitive key-phrase in books' bookshelves or subjects. For example,
-[`/books?topic=children`](http://gutendex.com/books?topic=children) gives books on the "Children's
-Literature" bookshelf, with the subject "Sick children -- Fiction", and so on.
-
-
-### Individual Books
-
-Individual books can be found at `/books/<id>`, where `<id>` is the book's Project Gutenberg ID
-number. Error responses will appear in this format:
-
-```
-{
-  "detail": <string of error message>
-}
+### 3. Setup Environment Variables
+Create a file named `gutendex/.env` using the template below:
+```env
+DEBUG=true
+SECRET_KEY=generate_a_random_string_here
+DATABASE_NAME=gutendex
+DATABASE_USER=gutendex_user
+DATABASE_PASSWORD=change_me
+DATABASE_HOST=127.0.0.1
+DATABASE_PORT=5432
+ALLOWED_HOSTS=127.0.0.1,localhost
 ```
 
+### 4. Create Database & Run Migrations
+Create your database inside PostgreSQL, then run migrations:
+```bash
+# In PostgreSQL terminal:
+# CREATE DATABASE gutendex;
+# CREATE USER gutendex_user WITH PASSWORD 'change_me';
+# GRANT ALL PRIVILEGES ON DATABASE gutendex TO gutendex_user;
 
-### API Objects
-
-
-Types of JSON objects served by Gutendex are given below.
-
-
-#### Book
-
-```
-{
-  "id": <number of Project Gutenberg ID>,
-  "title": <string>,
-  "authors": <array of Persons>,
-  "summaries": <array of strings>,
-  "editors": <array of Persons>,
-  "translators": <array of Persons>,
-  "subjects": <array of strings>,
-  "bookshelves": <array of strings>,
-  "languages": <array of strings>,
-  "copyright": <boolean or null>,
-  "media_type": <string>,
-  "formats": <Format>,
-  "download_count": <number>
-}
+python manage.py migrate
 ```
 
-
-#### Format
-
-```
-{
-  <string of MIME-type>: <string of URL>,
-  ...
-}
+### 5. Collect Static Files
+Generate the static assets for the developer portal page:
+```bash
+python manage.py collectstatic --noinput
 ```
 
-
-#### Person
-
+### 6. Start the Server
+Start the local Django development server:
+```bash
+python manage.py runserver
 ```
-{
-  "birth_year": <number or null>,
-  "death_year": <number or null>,
-  "name": <string>
-}
+
+Now navigate to `http://localhost:8000/` in your browser to view the interactive developer portal and API playground!
+
+---
+
+## Gutenberg Catalog Import
+
+To populate your database with Project Gutenberg ebook metadata:
+```bash
+python manage.py updatecatalog
 ```
+*Note: This downloads a ~700 MB catalog dump and inserts tens of thousands of books. It can take hours depending on network/system speeds.*
+
+---
+
+## Heroku Production Deployment
+
+This project is built specifically to deploy onto Heroku while satisfying strict hosting limitations (30s request timeouts and ephemeral dyno filesystems).
+
+### 1. Initialize & Provision
+```bash
+heroku create your-app-name
+heroku addons:create heroku-postgresql:essential-1 -a your-app-name
+heroku addons:create scheduler:standard -a your-app-name
+```
+
+### 2. Set Config Vars
+Set the required environment keys on Heroku:
+```bash
+heroku config:set SECRET_KEY=$(python3 -c "import secrets; print(secrets.token_urlsafe(50))") -a your-app-name
+heroku config:set DEBUG=False -a your-app-name
+heroku config:set ALLOWED_HOSTS=your-app-name.herokuapp.com -a your-app-name
+
+# S3 Configuration for dynamic content caching:
+heroku config:set S3_BUCKET_NAME=your-bucket-name -a your-app-name
+heroku config:set S3_ACCESS_KEY_ID=your-s3-key -a your-app-name
+heroku config:set S3_SECRET_ACCESS_KEY=your-s3-secret -a your-app-name
+```
+
+### 3. Deploy Code
+Deploy the codebase to your Heroku app:
+```bash
+heroku ps:type basic -a your-app-name
+git push heroku main
+```
+
+### 4. Database Setup & Remote Catalog Import
+Run database migrations and trigger the catalog updater inside a detached dyno:
+```bash
+heroku run python manage.py migrate -a your-app-name
+heroku run:detached --size=standard-2x python manage.py updatecatalog -a your-app-name
+```
+*Tip: Track the detached import using `heroku logs --tail -a your-app-name`.*
+
+---
+
+## Caching Architecture (Phase 4)
+
+Gutenberg mirrors can be slow, which triggers a `30-second router timeout (H12 error)` on Heroku web requests. Project Gutenberg Bookmarked sidesteps this using an **Asynchronous Content Caching Loop**:
+
+1. **Client Request:** The client calls `GET /content/{gutenberg_id}/?format=epub`.
+2. **Cache Hit:** If the EPUB file is cached in your S3 bucket, the server immediately issues a `302 redirect` to the S3 file download URL (taking <50ms).
+3. **Cache Miss:** If not cached, the server registers a `Pending` cache job and instantly returns a `202 Accepted` response status code to the client.
+4. **Worker Processing:** The background worker dyno detects the job, downloads the file from a randomized Gutenberg mirror, uploads the file to S3, and marks the status as `Ready`.
+5. **Polling:** The client polls `GET /content/{gutenberg_id}/status/?format=epub` every 3-5 seconds until it receives a status of `Ready` with the S3 URL.

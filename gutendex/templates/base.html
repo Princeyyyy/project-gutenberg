@@ -1,13 +1,59 @@
 {% load static %}<!doctype html>
-
-<html lang='en'>
+<html lang="en">
   <head>
-    <meta charset='UTF-8'>
-    <title>Gutendex</title>
-    <link href='{% static "styles/style.css" %}' rel='stylesheet' type='text/css'>
+    <meta charset="UTF-8">
+    <title>Project Gutenberg Bookmarked</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <link rel="stylesheet" href="{% static 'styles/style.css' %}">
+    <style>
+      .error-wrapper {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 100vh;
+        text-align: center;
+        padding: 1.5rem;
+      }
+      .error-card {
+        max-width: 480px;
+        width: 100%;
+      }
+      .error-card h1 {
+        font-size: 2.5rem;
+        font-weight: 800;
+        background: linear-gradient(135deg, #ff8a8a 0%, #ef4444 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        margin-bottom: 1rem;
+      }
+      .error-card p {
+        color: var(--text-secondary);
+        margin-bottom: 2rem;
+      }
+      .btn-back {
+        display: inline-block;
+        text-decoration: none;
+        background: var(--accent-color);
+        color: #fff;
+        padding: 0.75rem 2rem;
+        border-radius: 8px;
+        font-weight: 600;
+        transition: all 0.2s ease;
+      }
+      .btn-back:hover {
+        background: var(--accent-hover);
+        transform: translateY(-1px);
+      }
+    </style>
   </head>
 
   <body>
-    {% block content %}{% endblock %}
+    <div class="error-wrapper">
+      <div class="glass-panel error-card">
+        {% block content %}{% endblock %}
+        <p>The requested action could not be completed successfully or you do not have permission to access this page.</p>
+        <a href="/" class="btn-back">Go back home</a>
+      </div>
+    </div>
   </body>
 </html>

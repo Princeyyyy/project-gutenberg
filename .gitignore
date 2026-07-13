@@ -1,6 +1,8 @@
 *.pyc
+__pycache__/
 .DS_Store
 .vscode
 catalog_files
 gutendex/.env
+staticfiles/
 venv

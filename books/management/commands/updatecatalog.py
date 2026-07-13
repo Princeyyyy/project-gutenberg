@@ -261,13 +261,13 @@ def send_log_email():
                    font-size: 64px;
                    font-weight: 100;
                    text-align: center;">
-            Gutendex
+            Gutenberg Bookmarked
         </h1>
 
         <p style="color: #333;
-                  font-family: 'Helvetica Neue', sans-serif;
-                  font-size: 24px;
-                  font-weight: 200;">
+                   font-family: 'Helvetica Neue', sans-serif;
+                   font-size: 24px;
+                   font-weight: 200;">
             Here is the log from your catalog retrieval:
         </p>
 
@@ -276,7 +276,7 @@ def send_log_email():
                     font-size: 16px;
                     margin-left: 32px">''' + log_text + '</pre>'
 
-    email_text = '''GUTENDEX
+    email_text = '''GUTENBERG BOOKMARKED
 
     Here is the log from your catalog retrieval:
 
