@@ -12,7 +12,9 @@ Design rationale:
 """
 
 import logging
+import threading
 
+from django.db import close_old_connections
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.views import View
@@ -22,6 +24,87 @@ from .storage import get_presigned_download_url
 from .content_fetcher import get_s3_key
 
 logger = logging.getLogger(__name__)
+
+
+def _async_fetch_task(cached_content_id):
+    """Executes the mirror fetch and S3 upload in a background thread.
+
+    Cleans up Django DB connections to prevent connection leaks.
+    """
+    close_old_connections()
+    try:
+        from books.content_fetcher import (
+            fetch_from_mirrors,
+            try_direct_url,
+            ContentFetchError,
+        )
+        from books.storage import upload_file_to_s3
+        from django.utils import timezone
+
+        cached_content = CachedContent.objects.get(id=cached_content_id)
+        cached_content.status = CachedContent.Status.FETCHING
+        cached_content.save(update_fields=['status'])
+
+        book = cached_content.book
+        mime_type = cached_content.format_mime_type
+        gutenberg_id = book.gutenberg_id
+
+        format_entry = Format.objects.filter(book=book, mime_type=mime_type).first()
+        if not format_entry:
+            cached_content.status = CachedContent.Status.FAILED
+            cached_content.error_message = f'No format entry found for mime_type={mime_type}'
+            cached_content.completed_at = timezone.now()
+            cached_content.save()
+            return
+
+        original_url = format_entry.url
+        try:
+            file_bytes, content_type, mirror_used = fetch_from_mirrors(
+                gutenberg_id, original_url
+            )
+        except ContentFetchError as mirror_error:
+            try:
+                file_bytes, content_type, mirror_used = try_direct_url(original_url)
+            except ContentFetchError as direct_error:
+                cached_content.status = CachedContent.Status.FAILED
+                cached_content.error_message = (
+                    f'Mirror errors: {mirror_error}\nDirect URL error: {direct_error}'
+                )
+                cached_content.completed_at = timezone.now()
+                cached_content.save()
+                return
+
+        # Upload to S3
+        s3_key = get_s3_key(gutenberg_id, mime_type)
+        try:
+            storage_url = upload_file_to_s3(file_bytes, s3_key, content_type)
+        except Exception as e:
+            cached_content.status = CachedContent.Status.FAILED
+            cached_content.error_message = f'S3 upload failed: {e}'
+            cached_content.completed_at = timezone.now()
+            cached_content.save()
+            return
+
+        # Success! Mark as ready
+        cached_content.status = CachedContent.Status.READY
+        cached_content.storage_url = storage_url
+        cached_content.mirror_used = mirror_used
+        cached_content.file_size_bytes = len(file_bytes)
+        cached_content.completed_at = timezone.now()
+        cached_content.error_message = ''
+        cached_content.save()
+    except Exception as e:
+        logger.error('Async fetch thread error: %s', e)
+    finally:
+        close_old_connections()
+
+
+def trigger_background_fetch(cached_content):
+    """Spawns a thread to process the caching request asynchronously."""
+    thread = threading.Thread(target=_async_fetch_task, args=(cached_content.id,))
+    thread.daemon = True
+    thread.start()
+
 
 # Default format to request if none specified
 DEFAULT_FORMAT = 'application/epub+zip'
@@ -87,11 +170,14 @@ class ContentView(View):
             presigned_url = get_presigned_download_url(s3_key)
             return redirect(presigned_url)
 
-        if cached.status == CachedContent.Status.FAILED:
+        if created:
+            trigger_background_fetch(cached)
+        elif cached.status == CachedContent.Status.FAILED:
             # Previous attempt failed — reset to pending for retry
             cached.status = CachedContent.Status.PENDING
             cached.error_message = ''
             cached.save(update_fields=['status', 'error_message'])
+            trigger_background_fetch(cached)
 
         # Cache miss or still in progress — return 202
         return JsonResponse(
