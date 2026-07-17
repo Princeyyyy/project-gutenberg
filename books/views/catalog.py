@@ -7,6 +7,48 @@ from rest_framework import exceptions as drf_exceptions, viewsets
 from books.models import *
 from books.serializers import *
 
+def get_search_matching_book_ids(search_string):
+    """Finds book IDs that match the search string by querying each field/relationship
+    separately. This avoids massive PostgreSQL OR joins on multiple relations, which
+    causes timeouts on large datasets.
+    """
+    if not search_string:
+        return None
+
+    terms = [t.strip() for t in search_string.split() if t.strip()]
+    if not terms:
+        return None
+
+    final_ids = None
+
+    for term in terms[:5]:  # limit the number of terms to prevent CPU abuse
+        term_ids = set()
+
+        # 1. Matching titles
+        term_ids.update(Book.objects.filter(title__icontains=term).values_list('id', flat=True))
+
+        # 2. Matching authors
+        term_ids.update(Book.objects.filter(authors__name__icontains=term).values_list('id', flat=True))
+
+        # 3. Matching summaries
+        term_ids.update(Book.objects.filter(summaries__text__icontains=term).values_list('id', flat=True))
+
+        # 4. Matching subjects
+        term_ids.update(Book.objects.filter(subjects__name__icontains=term).values_list('id', flat=True))
+
+        # 5. Matching bookshelves
+        term_ids.update(Book.objects.filter(bookshelves__name__icontains=term).values_list('id', flat=True))
+
+        if final_ids is None:
+            final_ids = term_ids
+        else:
+            final_ids.intersection_update(term_ids)
+
+        if not final_ids:
+            break
+
+    return list(final_ids) if final_ids is not None else []
+
 
 class BookViewSet(viewsets.ModelViewSet):
     """ This is an API endpoint that allows books to be viewed. """
@@ -89,15 +131,9 @@ class BookViewSet(viewsets.ModelViewSet):
 
         search_string = self.request.GET.get('search')
         if search_string is not None:
-            search_terms = [t for t in search_string.split() if t]
-            for term in search_terms[:32]:
-                queryset = queryset.filter(
-                    Q(title__icontains=term) |
-                    Q(authors__name__icontains=term) |
-                    Q(summaries__text__icontains=term) |
-                    Q(subjects__name__icontains=term) |
-                    Q(bookshelves__name__icontains=term)
-                )
+            matching_ids = get_search_matching_book_ids(search_string)
+            if matching_ids is not None:
+                queryset = queryset.filter(id__in=matching_ids)
 
         topic = self.request.GET.get('topic')
         if topic is not None:
@@ -139,16 +175,14 @@ class SearchSuggestView(View):
         if len(query) < 2:
             return JsonResponse([], safe=False)
 
-        # Retrieve top 10 matching books using PostgreSQL GIN indexes
-        books = Book.objects.filter(
-            Q(title__icontains=query) |
-            Q(authors__name__icontains=query) |
-            Q(summaries__text__icontains=query) |
-            Q(subjects__name__icontains=query) |
-            Q(bookshelves__name__icontains=query)
-        ).prefetch_related(
-            'authors', 'editors', 'translators', 'languages', 'bookshelves', 'subjects', 'summaries'
-        ).order_by('-download_count')[:10]
+        # Retrieve top 10 matching books using optimized queries
+        matching_ids = get_search_matching_book_ids(query)
+        if matching_ids is not None:
+            books = Book.objects.filter(id__in=matching_ids).prefetch_related(
+                'authors', 'editors', 'translators', 'languages', 'bookshelves', 'subjects', 'summaries'
+            ).order_by('-download_count')[:10]
+        else:
+            books = []
 
         suggestions = []
         q_lower = query.lower()

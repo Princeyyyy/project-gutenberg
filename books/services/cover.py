@@ -71,11 +71,18 @@ def _async_cache_cover(book_id, original_url, format_id):
         close_old_connections()
 
 
+from concurrent.futures import ThreadPoolExecutor
+
+# Use a single-thread executor to limit DB connection usage and avoid pool exhaustion
+_cover_executor = ThreadPoolExecutor(max_workers=1)
+
+
 def cache_cover_in_background(book_id, original_url, format_id):
-    """Spawns a background thread to cache the cover image."""
-    thread = threading.Thread(
-        target=_async_cache_cover,
-        args=(book_id, original_url, format_id)
+    """Submits a background task to cache the cover image."""
+    _cover_executor.submit(
+        _async_cache_cover,
+        book_id,
+        original_url,
+        format_id
     )
-    thread.daemon = True
-    thread.start()
+

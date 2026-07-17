@@ -86,11 +86,18 @@ def _async_enrich_summary(book_id, title, author_name):
         close_old_connections()
 
 
+from concurrent.futures import ThreadPoolExecutor
+
+# Use a single-thread executor to limit DB connection usage and avoid pool exhaustion
+_summary_executor = ThreadPoolExecutor(max_workers=1)
+
+
 def enrich_summary_in_background(book_id, title, author_name):
-    """Spawns a background thread to fetch book summaries from Open Library."""
-    thread = threading.Thread(
-        target=_async_enrich_summary,
-        args=(book_id, title, author_name)
+    """Submits a background task to enrich the summary."""
+    _summary_executor.submit(
+        _async_enrich_summary,
+        book_id,
+        title,
+        author_name
     )
-    thread.daemon = True
-    thread.start()
+
