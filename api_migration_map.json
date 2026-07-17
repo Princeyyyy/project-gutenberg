@@ -167,6 +167,47 @@
       "notes": "Returns top 10 matching books sorted by download count. match_field indicates where the query matched first: 'title', 'author', 'summary', 'subject', or 'bookshelf'."
     },
     {
+      "name": "Most Popular Books List",
+      "description": "Exposes the absolute top 10 most popular books in the catalog. Suitable for a dedicated carousel or showcase section.",
+      "http_methods": ["GET"],
+      "path": "/api/v1/books/popular/",
+      "requires_auth": true,
+      "query_parameters": {
+        "languages": {
+          "type": "string",
+          "required": false,
+          "description": "Comma-separated two-character language codes (e.g. 'en,fr')."
+        },
+        "mime_type": {
+          "type": "string",
+          "required": false,
+          "description": "Filters by format MIME types starting with value (e.g. 'application/epub+zip')."
+        }
+      },
+      "response_content_type": "application/json",
+      "success_response_sample": [
+        {
+          "id": 84,
+          "title": "Frankenstein; or, the modern prometheus",
+          "authors": [{"name": "Mary Wollstonecraft Shelley", "birth_year": 1797, "death_year": 1851}],
+          "translators": [],
+          "editors": [],
+          "subjects": ["Horror tales", "Science fiction"],
+          "bookshelves": ["Science Fiction by Women"],
+          "languages": ["English"],
+          "copyright": false,
+          "media_type": "Text",
+          "formats": {
+            "application/epub+zip": "https://www.gutenberg.org/ebooks/84.epub3.images",
+            "image/jpeg": "https://bucketeer-a40dd3d4-d3bf-41be-bf7d-fa03be6746d7.s3.amazonaws.com/covers/84_cover.jpg?AWSAccessKeyId=..."
+          },
+          "download_count": 92345,
+          "summaries": ["A gothic horror novel..."]
+        }
+      ],
+      "notes": "Bypasses default pagination and returns exactly the top 10 matching books sorted by download count."
+    },
+    {
       "name": "Books Metadata Catalog List",
       "description": "Retrieve catalog book details. Supports pagination, sorting, search, and criteria filtering.",
       "http_methods": ["GET"],
@@ -223,6 +264,11 @@
           "type": "string",
           "required": false,
           "description": "Ordering types: 'popular' (default, download count), 'ascending' (ID order), 'descending'."
+        },
+        "exclude_popular": {
+          "type": "string",
+          "required": false,
+          "description": "If set to 'true', excludes the top 10 popular books from the list (to avoid duplicates when showing a separate popular carousel on client)."
         }
       },
       "response_content_type": "application/json",
