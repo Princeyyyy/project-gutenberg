@@ -11,8 +11,8 @@ import re
 
 def get_search_matching_book_ids(search_string):
     """Finds book IDs that match the search string by querying each field/relationship
-    separately. This avoids massive PostgreSQL OR joins on multiple relations, which
-    causes timeouts on large datasets.
+    separately using database-level UNION queries. This avoids massive PostgreSQL OR joins
+    on multiple relations and minimizes database roundtrips.
     """
     if not search_string:
         return None
@@ -35,22 +35,21 @@ def get_search_matching_book_ids(search_string):
     final_ids = None
 
     for term in terms[:5]:  # limit the number of terms to prevent CPU abuse
-        term_ids = set()
+        # Construct single-table queries (values_list of ID)
+        q1 = Book.objects.filter(title__icontains=term).values_list('id', flat=True)
+        q2 = Book.objects.filter(authors__name__icontains=term).values_list('id', flat=True)
+        q3 = Book.objects.filter(summaries__text__icontains=term).values_list('id', flat=True)
+        q4 = Book.objects.filter(subjects__name__icontains=term).values_list('id', flat=True)
+        q5 = Book.objects.filter(bookshelves__name__icontains=term).values_list('id', flat=True)
 
-        # 1. Matching titles
-        term_ids.update(Book.objects.filter(title__icontains=term).values_list('id', flat=True))
-
-        # 2. Matching authors
-        term_ids.update(Book.objects.filter(authors__name__icontains=term).values_list('id', flat=True))
-
-        # 3. Matching summaries
-        term_ids.update(Book.objects.filter(summaries__text__icontains=term).values_list('id', flat=True))
-
-        # 4. Matching subjects
-        term_ids.update(Book.objects.filter(subjects__name__icontains=term).values_list('id', flat=True))
-
-        # 5. Matching bookshelves
-        term_ids.update(Book.objects.filter(bookshelves__name__icontains=term).values_list('id', flat=True))
+        # Merge them via database-level UNION to run single unified SQL query
+        term_ids_query = q1.union(q2).union(q3).union(q4).union(q5)
+        
+        try:
+            term_ids = set(term_ids_query)
+        except Exception as e:
+            # Fallback to local python sets union in case UNION is unsupported (e.g. SQLite tests)
+            term_ids = set(q1) | set(q2) | set(q3) | set(q4) | set(q5)
 
         if final_ids is None:
             final_ids = term_ids
