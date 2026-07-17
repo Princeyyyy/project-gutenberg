@@ -170,6 +170,13 @@ class BookViewSet(viewsets.ModelViewSet):
                 Q(bookshelves__name__icontains=topic) | Q(subjects__name__icontains=topic)
             )
 
+        exclude_popular = self.request.GET.get('exclude_popular')
+        if exclude_popular == 'true':
+            # Get the top 10 book IDs sorted by popularity (download_count descending)
+            # We convert to a list of IDs to evaluate it first before applying the exclusion.
+            top_10_ids = list(queryset.order_by('-download_count').values_list('id', flat=True)[:10])
+            queryset = queryset.exclude(id__in=top_10_ids)
+
         return queryset.distinct()
 
 

@@ -174,3 +174,34 @@ class SearchTests(TestCase):
         self.assertEqual(data[0]['match_field'], "summary")
         self.assertIn('book', data[0])
         self.assertEqual(data[0]['book']['id'], 1111)
+
+    def test_exclude_popular(self):
+        """Verify exclude_popular=true filters out the top 10 most popular books."""
+        # Create 8 more books (making total 12 books in database)
+        for i in range(8):
+            Book.objects.create(
+                gutenberg_id=2000 + i,
+                title=f"Extra Book {i}",
+                download_count=100 + i,  # Less popular than Gatsby (1200), Romeo (1000), Macbeth (800), Science (500)
+                media_type="Text"
+            )
+
+        # Get all books without exclude_popular parameter (should return all 12 books)
+        response = self.client.get(reverse('book-list'), {}, **self.headers)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['count'], 12)
+
+        # Get books with exclude_popular=true (should filter out top 10 popular ones, leaving 2 books)
+        response_exclude = self.client.get(reverse('book-list'), {'exclude_popular': 'true'}, **self.headers)
+        self.assertEqual(response_exclude.status_code, 200)
+        results = response_exclude.json()['results']
+        self.assertEqual(len(results), 2)
+
+        # Confirm the 2 returned books are the least popular ones (Extra Book 0 and Extra Book 1)
+        returned_ids = [b['id'] for b in results]
+        self.assertIn(2000, returned_ids)
+        self.assertIn(2001, returned_ids)
+        self.assertNotIn(1513, returned_ids)  # Romeo (1000 download_count) should be excluded
+        self.assertNotIn(64317, returned_ids)  # Gatsby (1200 download_count) should be excluded
+
+
