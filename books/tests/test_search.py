@@ -204,4 +204,29 @@ class SearchTests(TestCase):
         self.assertNotIn(1513, returned_ids)  # Romeo (1000 download_count) should be excluded
         self.assertNotIn(64317, returned_ids)  # Gatsby (1200 download_count) should be excluded
 
+    def test_popular_endpoint(self):
+        """Verify `/api/v1/books/popular/` returns exactly the top 10 most popular books."""
+        # Create 8 more books (making total 12 books in database)
+        for i in range(8):
+            Book.objects.create(
+                gutenberg_id=3000 + i,
+                title=f"Extra Book {i}",
+                download_count=100 + i,  # Less popular than Gatsby (1200), Romeo (1000), Macbeth (800), Science (500)
+                media_type="Text"
+            )
+
+        # Get popular books (should return exactly 10 books)
+        response = self.client.get(reverse('book-popular'), {}, **self.headers)
+        self.assertEqual(response.status_code, 200)
+        results = response.json()
+        self.assertEqual(len(results), 10)
+
+        # Confirm Gatsby (1200) and Romeo (1000) are in the results (they are the most popular)
+        returned_ids = [b['id'] for b in results]
+        self.assertIn(64317, returned_ids)
+        self.assertIn(1513, returned_ids)
+        # Extra Book 0 and 1 (100 and 101 download_count) should NOT be in the top 10
+        self.assertNotIn(3000, returned_ids)
+        self.assertNotIn(3001, returned_ids)
+
 

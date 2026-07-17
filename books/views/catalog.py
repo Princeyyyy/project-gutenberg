@@ -3,6 +3,8 @@ from django.http import JsonResponse
 from django.views import View
 
 from rest_framework import exceptions as drf_exceptions, viewsets
+from rest_framework.decorators import action
+from rest_framework.response import Response
 
 from books.models import *
 from books.serializers import *
@@ -89,6 +91,15 @@ class BookViewSet(viewsets.ModelViewSet):
     )
 
     serializer_class = BookSerializer
+
+    @action(detail=False, methods=['get'])
+    def popular(self, request):
+        """Returns the top 10 most popular books matching filters."""
+        queryset = self.get_queryset()
+        # Bypasses pagination and slices exactly the top 10 most popular items
+        popular_books = queryset.order_by('-download_count')[:10]
+        serializer = self.get_serializer(popular_books, many=True)
+        return Response(serializer.data)
 
     def get_queryset(self):
         queryset = self.queryset
